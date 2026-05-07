@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -125,6 +125,30 @@ const scenarios = [
   }
 ];
 
+const initialGraphNodes = {
+  maintenance: { x: 80, y: 52, label: "Maintenance issue" },
+  weather: { x: 520, y: 52, label: "Severe weather" },
+  seal: { x: 300, y: 230, label: "Seal / valve failure" },
+  human: { x: 520, y: 330, label: "Human error" },
+  spill: { x: 300, y: 440, label: "Oil spill" }
+};
+
+const graphConnections = [
+  ["maintenance", "seal"],
+  ["weather", "seal"],
+  ["weather", "human"],
+  ["seal", "spill"],
+  ["human", "spill"]
+];
+
+const graphValues = {
+  maintenance: "pMaintenance",
+  weather: "pWeather",
+  seal: "pSeal",
+  human: "pHuman",
+  spill: "pSpill"
+};
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -197,6 +221,9 @@ function App() {
   const [maintenance, setMaintenance] = useState(scenarios[0].maintenance);
   const [weather, setWeather] = useState(scenarios[0].weather);
   const [reportReady, setReportReady] = useState(false);
+  const [graphNodes, setGraphNodes] = useState(initialGraphNodes);
+  const [graphView, setGraphView] = useState({ x: 0, y: 0, scale: 1 });
+  const graphDrag = useRef(null);
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
   const risk = useMemo(() => computeRisk(maintenance, weather), [maintenance, weather]);
@@ -215,6 +242,148 @@ function App() {
 
   function selectedAssetRisk(asset) {
     return computeRisk(asset.maintenance, asset.weather).pSpill;
+  }
+
+  function graphEdges() {
+    return graphConnections.map(([from, to]) => {
+      const start = graphNodes[from];
+      const end = graphNodes[to];
+      const startX = start.x + 80;
+      const startY = start.y + 38;
+      const endX = end.x + 80;
+      const endY = end.y + 38;
+      const midY = (startY + endY) / 2;
+      return {
+        id: `${from}-${to}`,
+        d: `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`
+      };
+    });
+  }
+
+  function startNodeDrag(event, nodeId) {
+    if (event.pointerType === "mouse") return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    graphDrag.current = {
+      type: "node",
+      nodeId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: graphNodes[nodeId]
+    };
+  }
+
+  function startNodeMouseDrag(event, nodeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const origin = graphNodes[nodeId];
+    const scale = graphView.scale;
+
+    function handleMove(moveEvent) {
+      setGraphNodes((current) => ({
+        ...current,
+        [nodeId]: {
+          ...current[nodeId],
+          x: clamp(origin.x + (moveEvent.clientX - startX) / scale, 16, 624),
+          y: clamp(origin.y + (moveEvent.clientY - startY) / scale, 16, 506)
+        }
+      }));
+    }
+
+    function handleUp() {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    }
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }
+
+  function startCanvasDrag(event) {
+    if (event.pointerType === "mouse") return;
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    graphDrag.current = {
+      type: "canvas",
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: graphView
+    };
+  }
+
+  function startCanvasMouseDrag(event) {
+    if (event.button !== 0) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const origin = graphView;
+
+    function handleMove(moveEvent) {
+      setGraphView((current) => ({
+        ...current,
+        x: clamp(origin.x + moveEvent.clientX - startX, -420, 220),
+        y: clamp(origin.y + moveEvent.clientY - startY, -320, 180)
+      }));
+    }
+
+    function handleUp() {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    }
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }
+
+  function moveGraph(event) {
+    const drag = graphDrag.current;
+    if (!drag) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+
+    if (drag.type === "node") {
+      setGraphNodes((current) => ({
+        ...current,
+        [drag.nodeId]: {
+          ...current[drag.nodeId],
+          x: clamp(drag.origin.x + deltaX / graphView.scale, 16, 624),
+          y: clamp(drag.origin.y + deltaY / graphView.scale, 16, 506)
+        }
+      }));
+    } else {
+      setGraphView((current) => ({
+        ...current,
+        x: clamp(drag.origin.x + deltaX, -420, 220),
+        y: clamp(drag.origin.y + deltaY, -320, 180)
+      }));
+    }
+  }
+
+  function stopGraphDrag(event) {
+    if (graphDrag.current?.pointerId === event.pointerId) {
+      graphDrag.current = null;
+    }
+  }
+
+  function zoomGraph(direction) {
+    setGraphView((current) => ({
+      ...current,
+      scale: clamp(current.scale + direction, 0.72, 1.55)
+    }));
+  }
+
+  function handleGraphWheel(event) {
+    event.preventDefault();
+    zoomGraph(event.deltaY > 0 ? -0.08 : 0.08);
+  }
+
+  function resetGraph() {
+    setGraphNodes(initialGraphNodes);
+    setGraphView({ x: 0, y: 0, scale: 1 });
   }
 
   return (
@@ -405,19 +574,50 @@ function App() {
                 <Brain size={22} />
               </div>
               <div className="model-layout">
-                <div className="network-diagram" aria-label="Bayesian network">
-                  <Node label="Maintenance issue" value={pct(risk.pMaintenance)} className="node maintenance" />
-                  <Node label="Severe weather" value={pct(risk.pWeather)} className="node weather" />
-                  <Node label="Seal / valve failure" value={pct(risk.pSeal)} className="node seal" />
-                  <Node label="Human error" value={pct(risk.pHuman)} className="node human" />
-                  <Node label="Oil spill" value={pct(risk.pSpill)} className="node spill" />
-                  <svg className="edges" viewBox="0 0 640 400" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M148 104 C185 148, 230 170, 292 190" />
-                    <path d="M488 104 C440 146, 390 168, 342 190" />
-                    <path d="M488 104 C495 168, 490 210, 454 244" />
-                    <path d="M318 238 C318 282, 315 300, 314 332" />
-                    <path d="M454 290 C415 312, 382 326, 336 344" />
-                  </svg>
+                <div
+                  className="network-diagram"
+                  aria-label="Interactive Bayesian network"
+                  onPointerDown={startCanvasDrag}
+                  onPointerMove={moveGraph}
+                  onPointerUp={stopGraphDrag}
+                  onPointerCancel={stopGraphDrag}
+                  onMouseDown={startCanvasMouseDrag}
+                  onWheel={handleGraphWheel}
+                >
+                  <div className="graph-toolbar">
+                    <span>Drag nodes or pan the model</span>
+                    <div>
+                      <button type="button" onClick={() => zoomGraph(-0.1)} aria-label="Zoom out">-</button>
+                      <button type="button" onClick={resetGraph}>Reset</button>
+                      <button type="button" onClick={() => zoomGraph(0.1)} aria-label="Zoom in">+</button>
+                    </div>
+                  </div>
+                  <div
+                    className="graph-stage"
+                    style={{
+                      transform: `translate(${graphView.x}px, ${graphView.y}px) scale(${graphView.scale})`
+                    }}
+                  >
+                    <svg className="edges" viewBox="0 0 800 620" aria-hidden="true">
+                      {graphEdges().map((edge) => (
+                        <path key={edge.id} d={edge.d} />
+                      ))}
+                    </svg>
+                    {Object.entries(graphNodes).map(([id, node]) => (
+                      <Node
+                        key={id}
+                        label={node.label}
+                        value={pct(risk[graphValues[id]])}
+                        className={`node ${id === "spill" ? "spill-node" : ""}`}
+                        style={{ left: node.x, top: node.y }}
+                        onPointerDown={(event) => startNodeDrag(event, id)}
+                        onPointerMove={moveGraph}
+                        onPointerUp={stopGraphDrag}
+                        onPointerCancel={stopGraphDrag}
+                        onMouseDown={(event) => startNodeMouseDrag(event, id)}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 <div className="root-causes">
@@ -539,9 +739,27 @@ function RiskSlider({ icon: Icon, label, value, onChange }) {
   );
 }
 
-function Node({ label, value, className }) {
+function Node({
+  label,
+  value,
+  className,
+  style,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onMouseDown
+}) {
   return (
-    <div className={className}>
+    <div
+      className={className}
+      style={style}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onMouseDown={onMouseDown}
+    >
       <strong>{label}</strong>
       <span>P(True) = {value}</span>
     </div>

@@ -500,7 +500,7 @@ input[type="range"] {
 
 .network-diagram {
   position: relative;
-  min-height: 400px;
+  min-height: 470px;
   border: 1px solid #cfe0f7;
   border-radius: 8px;
   background:
@@ -509,6 +509,61 @@ input[type="range"] {
     #ffffff;
   background-size: 32px 32px;
   overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.network-diagram:active {
+  cursor: grabbing;
+}
+
+.graph-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.graph-toolbar span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #285083;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #d8e2f2;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.graph-toolbar div {
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.graph-toolbar button {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--blue-strong);
+  font-weight: 900;
+}
+
+.graph-stage {
+  position: absolute;
+  left: 20px;
+  top: 18px;
+  width: 800px;
+  height: 620px;
+  transform-origin: 0 0;
 }
 
 .node {
@@ -525,6 +580,8 @@ input[type="range"] {
   place-content: center;
   gap: 4px;
   box-shadow: 0 10px 20px rgba(47, 125, 246, 0.12);
+  cursor: move;
+  touch-action: none;
 }
 
 .node span {
@@ -533,29 +590,7 @@ input[type="range"] {
   font-weight: 800;
 }
 
-.maintenance {
-  left: 8%;
-  top: 42px;
-}
-
-.weather {
-  right: 8%;
-  top: 42px;
-}
-
-.seal {
-  left: calc(50% - 80px);
-  top: 170px;
-}
-
-.human {
-  right: 8%;
-  top: 238px;
-}
-
-.spill {
-  left: calc(50% - 80px);
-  bottom: 26px;
+.spill-node {
   border-color: var(--red);
 }
 
@@ -799,40 +834,11 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
-  .node {
-    width: 138px;
+  .graph-toolbar {
+    align-items: flex-start;
   }
 
-  .maintenance,
-  .weather,
-  .seal,
-  .human,
-  .spill {
-    left: calc(50% - 69px);
-    right: auto;
-  }
-
-  .maintenance {
-    top: 22px;
-  }
-
-  .weather {
-    top: 124px;
-  }
-
-  .seal {
-    top: 232px;
-  }
-
-  .human {
-    top: 336px;
-  }
-
-  .spill {
-    bottom: 20px;
-  }
-
-  .edges {
-    opacity: 0.25;
+  .graph-toolbar span {
+    max-width: 150px;
   }
 }
